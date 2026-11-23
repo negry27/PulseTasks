@@ -1,1 +1,53 @@
-# PulseTasks
+# PulseTasks (PWA + GitHub Pages + Supabase)
+
+Sem build, sem npm: o GitHub Pages serve os arquivos direto, igual ao app de orçamentos.
+
+## Instalação (ordem)
+1. **Supabase**: crie um projeto novo.
+2. **SQL Editor** → cole todo o `supabase/schema.sql` → Run.
+3. **Authentication → Sign In / Providers**: desligue **"Allow new users to sign up"** (só o admin cria contas). Em Email, mínimo de senha = 8.
+4. **Criar o administrador**: Authentication → Users → *Add user* → e-mail `admin@pulsetasks.app` + sua senha, marcando *Auto Confirm*. Depois, no SQL Editor:
+   ```sql
+   insert into profiles(id,username,name,role)
+   select id,'admin','Administrador','admin' from auth.users where email='admin@pulsetasks.app';
+   ```
+   (o usuário de login será `admin`; para outro nome, troque nos dois lugares, sempre minúsculo).
+5. **Edge Function**: Edge Functions → *Deploy a new function* → nome `admin-users` → cole `supabase/functions/admin-users/index.ts`. (Ou CLI: `supabase functions deploy admin-users`.) A service_role já é injetada pelo Supabase; não copie para lugar nenhum.
+   Se seu usuário do GitHub não for `negry27`, ajuste a origem CORS no topo do arquivo.
+6. **config.js**: Project Settings → API → copie *Project URL* e a chave **anon/publishable** (NUNCA a service_role).
+7. **GitHub**: crie o repositório `negry27/pulsetasks`, envie todos os arquivos na branch `main`. Em Settings → Pages → Source: **GitHub Actions**. O deploy roda a cada push.
+8. Abra `https://negry27.github.io/pulsetasks/`. No celular: menu do navegador → *Adicionar à tela inicial*.
+
+## Regras implementadas
+- Login: usuário em minúsculas automático; senha exata (Supabase Auth, hash gerenciado).
+- Admin exclusivo cria/desativa usuários e troca senhas (Edge Function).
+- Tarefa sem responsável; atribuição posterior a várias pessoas; progresso individual e coletivo.
+- Status, prioridade, prazo, comentários, impedimentos (resolvíveis).
+- Validação só pelo admin, após "concluída"; validada fica travada; XP automático (10/20/40/60 por prioridade + 10 se no prazo).
+- Notificações, relatórios, auditoria (tabela `audit_log`, só o admin lê).
+
+## Segurança (o que protege de verdade)
+- RLS em todas as tabelas; `anon` sem acesso a nada; gatilhos impedem não-admin de validar, mudar criador, XP ou papéis.
+- Usuário comum só vê tarefas que criou ou em que é responsável. Admin vê tudo.
+- Todo texto do banco é escapado no front (XSS) + CSP no `index.html`.
+- Chave admin só dentro da Edge Function. Sem dados reais até concluir o checklist.
+
+## Checklist de testes (antes de usar dados reais)
+Crie 3 contas: admin, `ana`, `bruno`.
+- [ ] Login `ANA` e `ana` funcionam; senha com maiúscula errada falha.
+- [ ] Sem login, abrir `https://SEU-PROJETO.supabase.co/rest/v1/tasks` com a chave anon retorna `[]`/401.
+- [ ] Ana não vê tarefa de Bruno; admin vê todas.
+- [ ] Ana não consegue validar tarefa (erro) nem mudar `role`/`xp` (via console: `sb.from('profiles').update(...)`).
+- [ ] Ana não cria usuário (função retorna "Acesso negado").
+- [ ] Ana não lê `audit_log` nem notificações de Bruno.
+- [ ] Ana não edita título/prazo de tarefa criada por outra pessoa.
+- [ ] Tarefa validada não aceita mais alterações; XP creditado uma única vez.
+- [ ] Usuário desativado não consegue logar.
+- [ ] Cadastro público (signup) está desligado.
+- [ ] Nenhum arquivo do repositório contém `service_role`.
+
+## Limitações conhecidas
+- Edição de título/descrição/prazo de tarefa existente ainda não tem tela (o banco já protege).
+- Sem tempo real: os dados atualizam ao navegar/recarregar.
+- Biblioteca do Supabase vem do CDN jsDelivr; offline o app não abre dados (apenas a casca é cacheada).
+- Dados do sistema antigo não foram migrados.
