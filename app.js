@@ -16,12 +16,13 @@ const fmtDT = d => new Date(d).toLocaleString('pt-BR');
 
 let me = null, people = [], tab = 'tasks', filter = '', unread = 0;
 const who = id => esc(people.find(p => p.id === id)?.name ?? '—');
+const staff = () => people.filter(p => p.active && p.role === 'user'); // admin nunca entra em XP/atribuição
 const toast = m => { const t = $('#toast'); t.textContent = m; t.className = 'show'; setTimeout(() => t.className = '', 3200); };
 const fail = e => { console.error(e); toast(e?.message || 'Erro'); };
 
 function shell(html) {
-  const items = [['tasks', 'Tarefas'], ['team', 'Equipe'], ['notif', 'Avisos' + (unread ? ` (${unread})` : '')], ['reports', 'Relatórios'], ...(me.role === 'admin' ? [['admin', 'Admin']] : [])];
-  app.innerHTML = `<header><h1>Pulse<span>Tasks</span></h1><div class="me">${esc(me.name)} · ${me.xp} XP <button class="ghost" data-a="out">Sair</button></div></header><main>${html}</main><nav>${items.map(([k, l]) => `<button data-a="tab" data-v="${k}" class="${k === tab ? 'on' : ''}">${l}</button>`).join('')}</nav>`;
+  const items = [['tasks', 'Tarefas'], ['team', 'Equipe'], ['notif', 'Avisos' + (unread ? ` (${unread})` : '')], ['reports', 'Relatórios'], ...(me.role === 'admin' ? [['assign', 'Atribuir'], ['admin', 'Admin']] : [])];
+  app.innerHTML = `<header><h1>Pulse<span>Tasks</span></h1><div class="me">${esc(me.name)}${me.role === 'admin' ? '' : ` · ${me.xp} XP`} <button class="ghost" data-a="out">Sair</button></div></header><main>${html}</main><nav>${items.map(([k, l]) => `<button data-a="tab" data-v="${k}" class="${k === tab ? 'on' : ''}">${l}</button>`).join('')}</nav>`;
 }
 
 function loginView(msg = '') {
@@ -43,7 +44,7 @@ async function go(t = tab) {
     sb.from('profiles').select('id,username,name,role,xp,active').order('name'),
     sb.from('notifications').select('id', { count: 'exact', head: true }).eq('read', false)]);
   people = ps.data ?? []; unread = n.count ?? 0; me = people.find(p => p.id === me.id) ?? me;
-  ({ tasks: viewTasks, team: viewTeam, notif: viewNotif, reports: viewReports, admin: viewAdmin }[t] || viewTasks)();
+  ({ tasks: viewTasks, assign: viewAssign, team: viewTeam, notif: viewNotif, reports: viewReports, admin: viewAdmin }[t] || viewTasks)();
 }
 
 const avg = t => t.task_assignees.length ? Math.round(t.task_assignees.reduce((s, x) => s + x.progress, 0) / t.task_assignees.length) : 0;
@@ -62,8 +63,22 @@ async function viewTasks() {
   shell(`<div class="row"><select data-c="filter" style="width:auto"><option value="">Todas</option>${opts(ST, filter)}</select><button class="gold" data-a="new">+ Nova tarefa</button></div>` + (list.map(card).join('') || '<p class="mut">Nenhuma tarefa.</p>'));
 }
 
-function viewNew() {
-  shell(`<form data-f="new" class="card"><h2>Nova tarefa</h2><input name="title" placeholder="Título" required maxlength="140"><textarea name="description" placeholder="Descrição" maxlength="2000"></textarea><div class="row"><select name="priority" style="width:auto">${opts(PR, 'media')}</select><input type="date" name="due_date" style="width:auto"></div><p class="mut">Responsáveis (opcional, pode atribuir depois)</p>${people.filter(p => p.active).map(p => `<label class="chk"><input type="checkbox" name="as" value="${p.id}">${esc(p.name)}</label>`).join('')}<div class="row"><button type="button" class="ghost" data-a="tab" data-v="tasks">Cancelar</button><button class="gold">Criar</button></div></form>`);
+function openNew() {
+  closeModal();
+  const m = document.createElement('div'); m.id = 'modal'; m.className = 'modal';
+  m.innerHTML = `<form data-f="new" class="card"><h2>Nova tarefa</h2><input name="title" placeholder="Título" required maxlength="140"><textarea name="description" placeholder="Descrição (opcional)" maxlength="2000"></textarea><div class="row"><select name="priority" style="width:auto">${opts(PR, 'media')}</select><input type="date" name="due_date" style="width:auto"></div><p class="mut">A tarefa nasce sem responsável; atribua depois.</p><div class="row"><button type="button" class="ghost" data-a="closeModal">Cancelar</button><button class="gold">Criar</button></div></form>`;
+  document.body.appendChild(m);
+  m.querySelector('input').focus();
+}
+function closeModal() { $('#modal')?.remove(); }
+
+async function viewAssign() {
+  if (me.role !== 'admin') return go('tasks');
+  const { data, error } = await sb.from('tasks').select('*,task_assignees(user_id,progress)').eq('validated', false).order('created_at', { ascending: false });
+  if (error) return fail(error);
+  data.sort((a, b) => (a.task_assignees.length ? 1 : 0) - (b.task_assignees.length ? 1 : 0));
+  const n = data.filter(t => !t.task_assignees.length).length;
+  shell(`<h2>Atribuir tarefas</h2><p class="mut">${n} sem responsável. Marque uma ou mais pessoas e salve.</p>` + (data.map(t => `<form data-f="assign" data-v="${t.id}" class="card"><div class="row"><b>${esc(t.title)}</b><span class="chip p-${t.priority}">${PR[t.priority]}</span></div><div class="mut">${ST[t.status]} · prazo ${fmtDate(t.due_date)}</div>${staff().map(p => `<label class="chk"><input type="checkbox" name="as" value="${p.id}" ${t.task_assignees.some(x => x.user_id === p.id) ? 'checked' : ''}>${esc(p.name)}</label>`).join('') || '<p class="mut">Crie usuários na aba Admin.</p>'}<button class="gold">Salvar responsáveis</button></form>`).join('') || '<p class="mut">Nenhuma tarefa para atribuir.</p>'));
 }
 
 async function viewDetail(id) {
@@ -85,14 +100,14 @@ async function viewDetail(id) {
   <section class="card"><h3>Responsáveis · progresso coletivo ${coll}%</h3>
   ${as.map(x => `<div class="row"><span>${who(x.user_id)}</span><b>${x.progress}%</b></div>`).join('') || '<p class="mut">Ninguém atribuído.</p>'}
   ${mine && !lock ? `<label>Meu progresso<input type="range" min="0" max="100" step="5" value="${mine.progress}" data-c="prog" data-v="${k.id}"></label>` : ''}
-  ${mng && !lock ? `<form data-f="assign" data-v="${k.id}">${people.filter(p => p.active).map(p => `<label class="chk"><input type="checkbox" name="as" value="${p.id}" ${as.some(x => x.user_id === p.id) ? 'checked' : ''}>${esc(p.name)}</label>`).join('')}<button class="ghost">Salvar responsáveis</button></form>` : ''}</section>
+  ${mng && !lock ? `<form data-f="assign" data-v="${k.id}">${staff().map(p => `<label class="chk"><input type="checkbox" name="as" value="${p.id}" ${as.some(x => x.user_id === p.id) ? 'checked' : ''}>${esc(p.name)}</label>`).join('')}<button class="ghost">Salvar responsáveis</button></form>` : ''}</section>
   <section class="card"><h3>Comentários e impedimentos</h3>
   ${cm.map(m => `<div class="cm ${m.is_blocker ? 'blk' : ''}"><b>${who(m.user_id)}</b> <span class="mut">${fmtDT(m.created_at)}</span>${m.is_blocker ? ` <span class="chip p-urgente">${m.resolved ? 'impedimento resolvido' : 'impedimento'}</span>` : ''}<p>${esc(m.body)}</p>${m.is_blocker && !m.resolved && (mng || m.user_id === me.id) ? `<button class="ghost" data-a="resolve" data-v="${m.id}" data-t="${k.id}">Marcar resolvido</button>` : ''}</div>`).join('') || '<p class="mut">Sem comentários.</p>'}
   <form data-f="comment" data-v="${k.id}" data-lock="${lock}"><textarea name="body" required maxlength="1000" placeholder="Escreva um comentário"></textarea><label class="chk"><input type="checkbox" name="blk">É um impedimento</label><button class="gold">Enviar</button></form></section>`);
 }
 
 function viewTeam() {
-  shell('<h2>Equipe e XP</h2>' + people.filter(p => p.active).sort((a, b) => b.xp - a.xp).map((p, i) => `<div class="card row"><span>${i + 1}. ${esc(p.name)} ${p.role === 'admin' ? '<span class="chip">admin</span>' : ''}</span><b>Nv ${Math.floor(p.xp / 100) + 1} · ${p.xp} XP</b></div>`).join(''));
+  shell('<h2>Equipe e XP</h2>' + staff().sort((a, b) => b.xp - a.xp).map((p, i) => `<div class="card row"><span>${i + 1}. ${esc(p.name)} ${p.role === 'admin' ? '<span class="chip">admin</span>' : ''}</span><b>Nv ${Math.floor(p.xp / 100) + 1} · ${p.xp} XP</b></div>`).join(''));
 }
 
 async function viewNotif() {
@@ -106,7 +121,7 @@ async function viewReports() {
   if (error) return fail(error);
   const c = s => L.filter(k => k.status === s).length;
   const late = L.filter(k => k.due_date && k.due_date < today() && k.status !== 'concluida').length;
-  const per = people.filter(p => p.active).map(p => { const m = L.filter(k => k.task_assignees.some(a => a.user_id === p.id)); return { n: p.name, tot: m.length, done: m.filter(k => k.validated).length }; }).filter(r => r.tot);
+  const per = staff().map(p => { const m = L.filter(k => k.task_assignees.some(a => a.user_id === p.id)); return { n: p.name, tot: m.length, done: m.filter(k => k.validated).length }; }).filter(r => r.tot);
   shell(`<h2>Relatórios</h2><div class="grid">${Object.entries(ST).map(([k, v]) => `<div class="card stat"><b>${c(k)}</b><span>${v}</span></div>`).join('')}<div class="card stat"><b>${late}</b><span>Atrasadas</span></div><div class="card stat"><b>${L.filter(k => k.validated).length}</b><span>Validadas</span></div></div><h3>Produtividade por pessoa</h3>` + (per.map(r => `<div class="card row"><span>${esc(r.n)}</span><b>${r.done}/${r.tot} validadas</b></div>`).join('') || '<p class="mut">Sem dados.</p>'));
 }
 
@@ -114,14 +129,19 @@ async function viewAdmin() {
   if (me.role !== 'admin') return go('tasks');
   const { data: log } = await sb.from('audit_log').select('*').order('created_at', { ascending: false }).limit(40);
   shell(`<h2>Usuários</h2>${people.map(p => `<div class="card row"><span>${esc(p.name)} <span class="mut">@${esc(p.username)}</span> ${p.active ? '' : '<span class="chip p-urgente">inativo</span>'}</span>${p.id === me.id ? '' : `<span><button class="ghost" data-a="reset" data-v="${p.id}">Senha</button><button class="ghost" data-a="toggle" data-v="${p.id}" data-on="${p.active}">${p.active ? 'Desativar' : 'Ativar'}</button></span>`}</div>`).join('')}
-  <form data-f="newuser" class="card"><h3>Novo usuário</h3><input name="name" placeholder="Nome" required maxlength="80"><input name="username" placeholder="usuário (letras e números)" required pattern="[A-Za-z0-9._-]{3,30}" autocapitalize="none"><input name="password" type="password" placeholder="Senha (mín. 8)" minlength="8" maxlength="72" required autocomplete="new-password"><button class="gold">Criar usuário</button></form>
+  <form data-f="newuser" class="card"><h3>Novo usuário</h3><input name="name" placeholder="Nome" required maxlength="80"><input name="username" placeholder="usuário (letras e números)" required pattern="[A-Za-z0-9._\\-]{3,30}" autocapitalize="none"><input name="password" type="password" placeholder="Senha (mín. 8)" minlength="8" maxlength="72" required autocomplete="new-password"><button class="gold">Criar usuário</button></form>
   <h3>Auditoria (últimas 40)</h3>${(log ?? []).map(l => `<div class="mut log">${fmtDT(l.created_at)} · ${who(l.actor)} · ${esc(l.op)} ${esc(l.table_name)}</div>`).join('')}`);
 }
 
 async function adminFn(body) {
   const { data, error } = await sb.functions.invoke('admin-users', { body });
   let m = data?.error;
-  if (error && !m) { try { m = (await error.context.json()).error; } catch { m = 'Falha na operação'; } }
+  if (error && !m) {
+    if (error.context && typeof error.context.json === 'function') {
+      try { const j = await error.context.json(); m = j.error || j.message || `Erro ${error.context.status}`; }
+      catch { m = `Erro ${error.context.status || ''} na função admin-users`; }
+    } else m = 'Não consegui falar com a função admin-users. Confira se foi publicada com esse nome e com "Verify JWT" desligado.';
+  }
   if (m) { toast(m); return false; }
   return true;
 }
@@ -132,7 +152,8 @@ document.addEventListener('click', async e => {
   try {
     if (a === 'out') { await sb.auth.signOut(); loginView(); }
     else if (a === 'tab') go(v);
-    else if (a === 'new') viewNew();
+    else if (a === 'new') openNew();
+    else if (a === 'closeModal') closeModal();
     else if (a === 'open') viewDetail(v);
     else if (a === 'validate') { const { error } = await sb.from('tasks').update({ validated: true }).eq('id', v); if (error) return fail(error); toast('Validada, XP concedido'); viewDetail(v); }
     else if (a === 'del') { if (!confirm('Excluir esta tarefa?')) return; const { error } = await sb.from('tasks').delete().eq('id', v); if (error) return fail(error); go('tasks'); }
@@ -164,17 +185,15 @@ document.addEventListener('submit', async e => {
       if (error) return loginView('Usuário ou senha inválidos.');
       boot();
     } else if (k === 'new') {
-      const { data: t, error } = await sb.from('tasks').insert({ title: d.get('title').trim(), description: d.get('description').trim() || null, priority: d.get('priority'), due_date: d.get('due_date') || null }).select('id').single();
+      const { error } = await sb.from('tasks').insert({ title: d.get('title').trim(), description: d.get('description').trim() || null, priority: d.get('priority'), due_date: d.get('due_date') || null });
       if (error) return fail(error);
-      const ids = d.getAll('as');
-      if (ids.length) { const { error: e2 } = await sb.from('task_assignees').insert(ids.map(u => ({ task_id: t.id, user_id: u }))); if (e2) fail(e2); }
-      go('tasks');
+      closeModal(); toast('Tarefa criada'); go('tasks');
     } else if (k === 'assign') {
       const cur = ((await sb.from('task_assignees').select('user_id').eq('task_id', id)).data ?? []).map(x => x.user_id);
       const want = d.getAll('as'), add = want.filter(u => !cur.includes(u)), rem = cur.filter(u => !want.includes(u));
       if (rem.length) { const { error } = await sb.from('task_assignees').delete().eq('task_id', id).in('user_id', rem); if (error) return fail(error); }
       if (add.length) { const { error } = await sb.from('task_assignees').insert(add.map(u => ({ task_id: id, user_id: u }))); if (error) return fail(error); }
-      viewDetail(id);
+      toast('Responsáveis salvos'); tab === 'assign' ? viewAssign() : viewDetail(id);
     } else if (k === 'comment') {
       const blk = d.get('blk') === 'on';
       const { error } = await sb.from('comments').insert({ task_id: id, body: d.get('body').trim(), is_blocker: blk });

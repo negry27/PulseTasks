@@ -7,7 +7,7 @@ h1{margin:0;font-size:1.3rem}h1 span{color:var(--gold)}h2,h3{margin:.6rem 0}
 .me{font-size:.8rem;color:var(--mut)}
 main{max-width:760px;margin:0 auto;padding:14px 14px 90px}
 nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#101013;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
-nav button{flex:1;background:none;border:0;color:var(--mut);padding:14px 2px;font-size:.78rem}
+nav button{flex:1;background:none;border:0;color:var(--mut);padding:14px 2px;font-size:.72rem}
 nav button.on{color:var(--gold);border-top:2px solid var(--gold)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0}
 .card[data-a]{cursor:pointer}.card.new{border-color:var(--gold)}
@@ -28,3 +28,4 @@ button.ghost{background:none}button.danger{background:none;color:var(--bad);bord
 .login{max-width:340px;margin:18vh auto;padding:0 20px;text-align:center}.login h1{font-size:2rem;margin-bottom:18px}
 #toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:var(--gold);color:#111;padding:10px 16px;border-radius:10px;opacity:0;pointer-events:none;transition:.2s;max-width:90%}
 #toast.show{opacity:1}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:16px;z-index:20}.modal form{width:100%;max-width:460px;margin:0}

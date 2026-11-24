@@ -1,5 +1,5 @@
 // Network-first para arquivos do app; nunca intercepta chamadas ao Supabase (outra origem).
-const V = 'pulsetasks-v1';
+const V = 'pulsetasks-v2';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'config.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener('activate', e => {

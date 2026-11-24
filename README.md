@@ -12,11 +12,25 @@ Sem build, sem npm: o GitHub Pages serve os arquivos direto, igual ao app de or�
    select id,'admin','Administrador','admin' from auth.users where email='admin@pulsetasks.app';
    ```
    (o usuário de login será `admin`; para outro nome, troque nos dois lugares, sempre minúsculo).
-5. **Edge Function**: Edge Functions → *Deploy a new function* → nome `admin-users` → cole `supabase/functions/admin-users/index.ts`. (Ou CLI: `supabase functions deploy admin-users`.) A service_role já é injetada pelo Supabase; não copie para lugar nenhum.
+5. **Edge Function**: Edge Functions → *Deploy a new function* → nome **exatamente** `admin-users` (o painel sugere nomes aleatórios como `swift-service`; troque) → cole `supabase/functions/admin-users/index.ts`. (Ou CLI: `supabase functions deploy admin-users`.) As chaves secretas já são injetadas pelo Supabase (`SUPABASE_SECRET_KEYS`); não copie para lugar nenhum. **Desmarque "Verify JWT"** ao publicar (ou use `--no-verify-jwt`): com as chaves novas a verificação automática falha, e a própria função já valida o usuário e exige papel admin.
    Se seu usuário do GitHub não for `negry27`, ajuste a origem CORS no topo do arquivo.
-6. **config.js**: Project Settings → API → copie *Project URL* e a chave **anon/publishable** (NUNCA a service_role).
+6. **config.js**: Project Settings → API → copie o *Project URL* e a chave **Publishable** (`sb_publishable_...`). NUNCA a Secret (`sb_secret_...`).
 7. **GitHub**: crie o repositório `negry27/pulsetasks`, envie todos os arquivos na branch `main`. Em Settings → Pages → Source: **GitHub Actions**. O deploy roda a cada push.
 8. Abra `https://negry27.github.io/pulsetasks/`. No celular: menu do navegador → *Adicionar à tela inicial*.
+
+## Atualizando uma instalação que já está rodando
+1. SQL Editor → rode `supabase/update.sql` (admin sem tarefas/XP, leitura da tarefa recém-criada e endurecimento de funções). Pode rodar mais de uma vez.
+2. Substitua os arquivos do repositório pelos novos e faça o commit; o Pages republica sozinho.
+3. Antes de usar de verdade: rode `supabase/reset.sql` para zerar tarefas, avisos, XP e auditoria.
+
+## Fluxo de uso
+- **Tarefas → + Nova tarefa**: abre uma janelinha só para criar (título, descrição, prioridade, prazo). A tarefa nasce sem responsável.
+- **Atribuir** (só admin): lista todas as tarefas ainda não validadas, as sem responsável primeiro. Marque uma ou mais pessoas e salve.
+- Admin não recebe tarefas nem XP; só usuários comuns entram no ranking.
+
+## Problemas comuns
+- **"Não consegui falar com a função admin-users"** ao criar usuário: a função não foi publicada com o nome exato `admin-users`, ou está com *Verify JWT* ligado. Confira em Edge Functions e republique com Verify JWT desligado.
+- **Outra mensagem de erro**: o app agora mostra o texto devolvido pela função; veja também Edge Functions → admin-users → Logs.
 
 ## Regras implementadas
 - Login: usuário em minúsculas automático; senha exata (Supabase Auth, hash gerenciado).
