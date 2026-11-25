@@ -19,7 +19,7 @@ Sem build, sem npm: o GitHub Pages serve os arquivos direto, igual ao app de or�
 8. Abra `https://negry27.github.io/pulsetasks/`. No celular: menu do navegador → *Adicionar à tela inicial*.
 
 ## Atualizando uma instalação que já está rodando
-1. SQL Editor → rode `supabase/update.sql` (admin sem tarefas/XP, leitura da tarefa recém-criada e endurecimento de funções). Pode rodar mais de uma vez.
+1. SQL Editor → rode `supabase/update.sql` (pode rodar mais de uma vez). Em instalação nova, rode `schema.sql` e depois `update.sql`.
 2. Substitua os arquivos do repositório pelos novos e faça o commit; o Pages republica sozinho.
 3. Antes de usar de verdade: rode `supabase/reset.sql` para zerar tarefas, avisos, XP e auditoria.
 
@@ -31,6 +31,21 @@ Sem build, sem npm: o GitHub Pages serve os arquivos direto, igual ao app de or�
 ## Problemas comuns
 - **"Não consegui falar com a função admin-users"** ao criar usuário: a função não foi publicada com o nome exato `admin-users`, ou está com *Verify JWT* ligado. Confira em Edge Functions e republique com Verify JWT desligado.
 - **Outra mensagem de erro**: o app agora mostra o texto devolvido pela função; veja também Edge Functions → admin-users → Logs.
+
+## Horário, XP e desempenho
+- **Horário:** funcionários só veem tarefas, atribuições, comentários e avisos das 06:00 às 20:00 (Brasília). O admin vê tudo sempre. Dá para mudar em Admin → Horário.
+- **20:00:** as tarefas não concluídas e não validadas voltam a "pendente, sem responsável" (agendador a cada 10 min). As concluídas aguardando validação mantêm o responsável. Admin → "Recolher tarefas agora" faz isso na hora.
+- **XP = base da prioridade × fator de tempo × fator da nota do admin × sorte (±10%)**
+  - Base: baixa 10, média 20, alta 40, urgente 60.
+  - Tempo: com estimativa (min) → até 80% do estimado ×1,3; até 100% ×1,15; até 125% ×1,0; até 150% ×0,8; acima ×0,6. Sem estimativa, vale o prazo: no prazo ×1,15; atrasado perde 10% por dia (mínimo ×0,5). Sem os dois, ×1,0. O relógio só conta dentro do horário de trabalho.
+  - Nota do admin ao validar (obrigatória): 1 → ×0,4 · 2 → ×0,7 · 3 → ×1,0 · 4 → ×1,2 · 5 → ×1,5.
+  - Sorte: sorteio individual entre 0,90 e 1,10.
+  - Admin nunca recebe XP nem tarefas.
+- **Desempenho:** aba com equipe e pessoas por mês (tarefas, XP, nota média, % no prazo, minutos médios). Admin abre o detalhe de qualquer pessoa; funcionário só o próprio.
+
+## O que fica salvo
+Tudo no Supabase: tarefas, atribuições, progresso, comentários, impedimentos, avisos, XP (com nota/tempo/fatores) e atividade. Nada fica só no celular.
+No plano Free, confira em Database → Backups se há backup e lembre que projetos sem uso podem ser pausados.
 
 ## Regras implementadas
 - Login: usuário em minúsculas automático; senha exata (Supabase Auth, hash gerenciado).

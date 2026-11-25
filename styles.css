@@ -29,3 +29,4 @@ button.ghost{background:none}button.danger{background:none;color:var(--bad);bord
 #toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:var(--gold);color:#111;padding:10px 16px;border-radius:10px;opacity:0;pointer-events:none;transition:.2s;max-width:90%}
 #toast.show{opacity:1}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:16px;z-index:20}.modal form{width:100%;max-width:460px;margin:0}
+.warn{border-color:var(--gold);color:var(--gold)}.valid{border-top:1px solid var(--line);margin-top:8px;padding-top:8px}
