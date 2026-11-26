@@ -43,6 +43,11 @@ Sem build, sem npm: o GitHub Pages serve os arquivos direto, igual ao app de or�
   - Admin nunca recebe XP nem tarefas.
 - **Desempenho:** aba com equipe e pessoas por mês (tarefas, XP, nota média, % no prazo, minutos médios). Admin abre o detalhe de qualquer pessoa; funcionário só o próprio.
 
+## Papéis
+- **Admin:** cria tarefas, atribui (1 ou várias pessoas), dá nota, valida, vê desempenho de todos e a atividade.
+- **Funcionário:** tela individual. Vê só as tarefas atribuídas a ele (e só das 06:00 às 20:00), **inicia**, ajusta o progresso, comenta/avisa impedimento e **conclui a própria parte**. Não cria tarefa, não vê colegas nem o desempenho deles.
+- **Tarefa em equipe:** o status é da tarefa. Ela só vira "concluída" quando todos os responsáveis concluem a parte deles. O painel conta **tarefas**, não funcionários (1 tarefa com 5 pessoas = 1 tarefa; cada um recebe o próprio XP).
+
 ## O que fica salvo
 Tudo no Supabase: tarefas, atribuições, progresso, comentários, impedimentos, avisos, XP (com nota/tempo/fatores) e atividade. Nada fica só no celular.
 No plano Free, confira em Database → Backups se há backup e lembre que projetos sem uso podem ser pausados.

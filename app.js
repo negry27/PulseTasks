@@ -80,7 +80,7 @@ const card = t => {
   return `<article class="card" data-a="open" data-v="${t.id}"><div class="row"><b>${esc(t.title)}</b><span class="chip p-${t.priority}">${PR[t.priority]}</span></div>
   <div class="mut">${ST[t.status]}${t.validated ? ` · ✔ validada (nota ${t.rating}/5)` : ''} · prazo ${fmtDate(t.due_date)}${t.estimated_minutes ? ` · ⏱ ${t.estimated_minutes} min` : ''}${late ? ' <span class="late">atrasada</span>' : ''}</div>
   <div class="bar"><i style="width:${avg(t)}%"></i></div>
-  <div class="mut">${t.task_assignees.length ? t.task_assignees.map(a => who(a.user_id)).join(', ') : 'Sem responsável'} · ${avg(t)}%</div></article>`;
+  <div class="mut">${me.role === 'admin' ? `${t.task_assignees.length ? t.task_assignees.map(a => who(a.user_id)).join(', ') : 'Sem responsável'} · ${avg(t)}%` : `Meu progresso: ${avg(t)}%`}</div></article>`;
 };
 
 function viewTasks() {
@@ -93,7 +93,7 @@ function viewTasks() {
     const list = data.filter(t => !filter || t.status === filter);
     shell((closed ? `<div class="card warn"><b>Fora do horário.</b><br>As tarefas ficam disponíveis das ${cfg.open} às ${cfg.close}.</div>` : '')
       + (adm && !openNow ? `<p class="mut">Fora do horário: os funcionários não estão vendo tarefas agora (${cfg.open}–${cfg.close}).</p>` : '')
-      + `<div class="row"><select data-c="filter" style="width:auto"><option value="">Todas</option>${opts(ST, filter)}</select>${closed ? '' : '<button class="gold" data-a="new">+ Nova tarefa</button>'}</div>`
+      + `<div class="row"><select data-c="filter" style="width:auto"><option value="">Todas</option>${opts(ST, filter)}</select>${adm ? '<button class="gold" data-a="new">+ Nova tarefa</button>' : ''}</div>`
       + (list.map(card).join('') || '<p class="mut">Nenhuma tarefa.</p>'));
   });
 }
@@ -134,13 +134,13 @@ function viewDetail(id) {
     shell(`<button class="ghost" data-a="tab" data-v="tasks">← Voltar</button>
   <section class="card"><h2>${esc(k.title)}</h2><p>${esc(k.description) || '<span class="mut">Sem descrição</span>'}</p>
   <div class="mut">Criada por ${who(k.created_by)} · prazo ${fmtDate(k.due_date)}${k.estimated_minutes ? ` · ⏱ estimado ${k.estimated_minutes} min` : ''} · <span class="chip p-${k.priority}">${PR[k.priority]}</span></div>
-  <label>Status <select data-c="status" data-v="${k.id}" ${lock ? 'disabled' : ''}>${opts(ST, k.status)}</select></label>
+  ${adm ? `<label>Status <select data-c="status" data-v="${k.id}" ${lock ? 'disabled' : ''}>${opts(ST, k.status)}</select></label>` : `<p>Status: <b>${ST[k.status]}</b></p>${lock ? '' : k.status === 'pendente' ? `<button class="gold" data-a="start" data-v="${k.id}">▶ Iniciar tarefa</button>` : k.status === 'andamento' ? (mine?.progress === 100 ? '<p class="ok">✔ Você concluiu a sua parte. Aguardando os outros responsáveis.</p>' : `<button class="gold" data-a="finish" data-v="${k.id}">✔ Concluir tarefa</button>`) : k.status === 'bloqueada' ? `<button class="gold" data-a="resume" data-v="${k.id}">▶ Retomar tarefa</button>` : '<p class="mut">Concluída. Aguardando a validação do admin.</p>'}`}
   ${k.validated ? `<p class="ok">✔ Validada por ${who(k.validated_by)} em ${fmtDT(k.validated_at)} · nota ${k.rating}/5</p>` : ''}
   ${adm && k.status === 'concluida' && !k.validated ? `<div class="valid"><label>Nota do admin (qualidade)<select name="rating">${[5, 4, 3, 2, 1].map(n => `<option value="${n}" ${n === 3 ? 'selected' : ''}>${n} ${'★'.repeat(n)}</option>`).join('')}</select></label><button class="gold" data-a="validate" data-v="${k.id}">Aprovar e validar (+XP)</button></div>` : ''}
   ${adm ? `<button class="danger" data-a="del" data-v="${k.id}">Excluir tarefa</button>` : ''}</section>
-  <section class="card"><h3>Responsáveis · progresso coletivo ${coll}%</h3>
-  ${as.map(x => `<div class="row"><span>${who(x.user_id)}</span><b>${x.progress}%</b></div>`).join('') || '<p class="mut">Ninguém atribuído.</p>'}
-  ${mine && !lock ? `<label>Meu progresso<input type="range" min="0" max="100" step="5" value="${mine.progress}" data-c="prog" data-v="${k.id}"></label>` : ''}
+  <section class="card"><h3>${adm ? `Responsáveis · progresso coletivo ${coll}%` : 'Meu progresso'}</h3>
+  ${adm ? (as.map(x => `<div class="row"><span>${who(x.user_id)}</span><b>${x.progress}%</b></div>`).join('') || '<p class="mut">Ninguém atribuído.</p>') : (mine ? `<div class="row"><span>Andamento</span><b>${mine.progress}%</b></div>` : '')}
+  ${mine && !lock && k.status === 'andamento' ? `<label>Ajustar meu progresso<input type="range" min="0" max="100" step="5" value="${mine.progress}" data-c="prog" data-v="${k.id}"></label>` : ''}
   ${mng && !lock ? `<form data-f="assign" data-v="${k.id}">${staff().map(p => `<label class="chk"><input type="checkbox" name="as" value="${p.id}" ${as.some(x => x.user_id === p.id) ? 'checked' : ''}>${esc(p.name)}</label>`).join('')}<button class="ghost">Salvar responsáveis</button></form>` : ''}</section>
   <section class="card"><h3>Comentários e impedimentos</h3>
   ${cm.map(m => `<div class="cm ${m.is_blocker ? 'blk' : ''}"><b>${who(m.user_id)}</b> <span class="mut">${fmtDT(m.created_at)}</span>${m.is_blocker ? ` <span class="chip p-urgente">${m.resolved ? 'impedimento resolvido' : 'impedimento'}</span>` : ''}<p>${esc(m.body)}</p>${m.is_blocker && !m.resolved && (mng || m.user_id === me.id) ? `<button class="ghost" data-a="resolve" data-v="${m.id}" data-t="${k.id}">Marcar resolvido</button>` : ''}</div>`).join('') || '<p class="mut">Sem comentários.</p>'}
@@ -161,22 +161,37 @@ const monthRange = () => {
 };
 
 function viewPerf() {
+  const adm = me.role === 'admin';
   swr('perf:' + month, async () => {
-    const [r, t] = await Promise.all([sb.rpc('team_month', { p_month: month + '-01' }), me.role === 'admin' ? sb.from('tasks').select('status,validated,due_date') : Promise.resolve({ data: null })]);
+    const [a, b] = monthRange();
+    const [r, t, x] = await Promise.all([
+      sb.rpc('team_month', { p_month: month + '-01' }),
+      adm ? sb.from('tasks').select('status,validated,due_date') : Promise.resolve({ data: null }),
+      adm ? sb.from('xp_log').select('task_id,rating,minutes,on_time').gte('created_at', a).lt('created_at', b) : Promise.resolve({ data: null })]);
     if (r.error) { fail(r.error); return; }
-    return { rows: r.data ?? [], sit: t.data };
-  }, ({ rows, sit }) => {
-    const tot = rows.reduce((s, r) => s + r.tarefas, 0), xpm = rows.reduce((s, r) => s + r.xp_mes, 0);
-    const wavg = k => { const w = rows.filter(r => r[k] != null && r.tarefas); const d = w.reduce((s, r) => s + r.tarefas, 0); return d ? (w.reduce((s, r) => s + r[k] * r.tarefas, 0) / d) : null; };
-    const nota = wavg('nota_media'), mins = wavg('minutos_medios'), pz = tot ? Math.round(rows.reduce((s, r) => s + r.no_prazo, 0) * 100 / tot) : null;
+    return { rows: r.data ?? [], sit: t.data, logs: x.data };
+  }, ({ rows, sit, logs }) => {
+    const monthInput = `<input type="month" data-c="month" value="${month}" max="${today().slice(0, 7)}" style="width:auto">`;
+    if (!adm) {   // funcionário: só o próprio desempenho
+      const r = rows[0] ?? { tarefas: 0, xp_mes: 0, nota_media: null, minutos_medios: null, no_prazo: 0 };
+      shell(`<div class="row"><h2>Meu desempenho</h2>${monthInput}</div>
+      <div class="grid"><div class="card stat"><b>${r.tarefas}</b><span>Tarefas validadas</span></div><div class="card stat"><b>${r.xp_mes}</b><span>XP no mês</span></div><div class="card stat"><b>${r.nota_media ?? '—'}</b><span>Nota média</span></div><div class="card stat"><b>${r.tarefas ? Math.round(r.no_prazo * 100 / r.tarefas) + '%' : '—'}</b><span>No prazo</span></div><div class="card stat"><b>${r.minutos_medios ?? '—'}</b><span>Min. médios</span></div><div class="card stat"><b>Nv ${Math.floor(me.xp / 100) + 1}</b><span>${me.xp} XP no total</span></div></div>
+      <h3>Tarefas do mês</h3><div id="det-${me.id}"></div>`);
+      showPerfUser(me.id); return;
+    }
+    // admin: tarefas contadas uma vez (não por funcionário)
+    const uniq = [...new Map((logs ?? []).map((l, i) => [l.task_id ?? 'x' + i, l])).values()];
+    const tot = uniq.length, xpm = rows.reduce((s, r) => s + r.xp_mes, 0);
+    const nota = tot ? uniq.reduce((s, l) => s + l.rating, 0) / tot : null, mins = tot ? uniq.reduce((s, l) => s + l.minutes, 0) / tot : null;
+    const pz = tot ? Math.round(uniq.filter(l => l.on_time).length * 100 / tot) : null;
     const maxXp = Math.max(1, ...rows.map(r => r.xp_mes));
-    const late = sit ? sit.filter(k => k.due_date && k.due_date < today() && k.status !== 'concluida').length : 0;
-    shell(`<div class="row"><h2>Desempenho</h2><input type="month" data-c="month" value="${month}" max="${today().slice(0, 7)}" style="width:auto"></div>
-    <h3>Equipe no mês</h3><div class="grid"><div class="card stat"><b>${tot}</b><span>Tarefas validadas</span></div><div class="card stat"><b>${xpm}</b><span>XP ganho</span></div><div class="card stat"><b>${nota == null ? '—' : nota.toFixed(1)}</b><span>Nota média</span></div><div class="card stat"><b>${pz == null ? '—' : pz + '%'}</b><span>No prazo</span></div><div class="card stat"><b>${mins == null ? '—' : Math.round(mins)}</b><span>Min. médios</span></div></div>
-    <h3>Por pessoa${me.role === 'admin' ? ' <span class="mut">(toque para ver as tarefas)</span>' : ''}</h3>
-    ${rows.map(r => { const can = me.role === 'admin' || r.uid === me.id; return `<div class="card" ${can ? `data-a="perfuser" data-v="${r.uid}"` : ''}><div class="row"><b>${esc(r.nome)}</b><b>${r.xp_mes} XP</b></div><div class="bar"><i style="width:${Math.round(r.xp_mes * 100 / maxXp)}%"></i></div><div class="mut">${r.tarefas} tarefa(s) · nota ${r.nota_media ?? '—'} · ${r.minutos_medios ?? '—'} min médios · ${r.no_prazo} no prazo</div><div id="det-${r.uid}" data-a="none"></div></div>`; }).join('') || '<p class="mut">Sem funcionários.</p>'}
+    const late = sit.filter(k => k.due_date && k.due_date < today() && k.status !== 'concluida').length;
+    shell(`<div class="row"><h2>Desempenho</h2>${monthInput}</div>
+    <h3>Equipe no mês</h3><div class="grid"><div class="card stat"><b>${tot}</b><span>Tarefas validadas</span></div><div class="card stat"><b>${xpm}</b><span>XP distribuído</span></div><div class="card stat"><b>${nota == null ? '—' : nota.toFixed(1)}</b><span>Nota média</span></div><div class="card stat"><b>${pz == null ? '—' : pz + '%'}</b><span>No prazo</span></div><div class="card stat"><b>${mins == null ? '—' : Math.round(mins)}</b><span>Min. médios</span></div></div>
+    <h3>Por pessoa <span class="mut">(toque para ver as tarefas)</span></h3>
+    ${rows.map(r => `<div class="card" data-a="perfuser" data-v="${r.uid}"><div class="row"><b>${esc(r.nome)}</b><b>${r.xp_mes} XP</b></div><div class="bar"><i style="width:${Math.round(r.xp_mes * 100 / maxXp)}%"></i></div><div class="mut">${r.tarefas} tarefa(s) · nota ${r.nota_media ?? '—'} · ${r.minutos_medios ?? '—'} min médios · ${r.no_prazo} no prazo</div><div id="det-${r.uid}" data-a="none"></div></div>`).join('') || '<p class="mut">Sem funcionários.</p>'}
     <h3>Ranking geral</h3>${staff().sort((a, b) => b.xp - a.xp).map((p, i) => `<div class="card row"><span>${i + 1}. ${esc(p.name)}</span><b>Nv ${Math.floor(p.xp / 100) + 1} · ${p.xp} XP</b></div>`).join('')}
-    ${sit ? `<h3>Situação atual</h3><div class="grid">${Object.entries(ST).map(([k, v]) => `<div class="card stat"><b>${sit.filter(x => x.status === k).length}</b><span>${v}</span></div>`).join('')}<div class="card stat"><b>${late}</b><span>Atrasadas</span></div></div>` : ''}`);
+    <h3>Situação atual</h3><div class="grid">${Object.entries(ST).map(([k, v]) => `<div class="card stat"><b>${sit.filter(x => x.status === k).length}</b><span>${v}</span></div>`).join('')}<div class="card stat"><b>${late}</b><span>Atrasadas</span></div></div>`);
   });
 }
 
@@ -250,6 +265,11 @@ document.addEventListener('click', async e => {
     else if (a === 'toggle') { if (await adminFn({ action: 'toggle', user_id: v, active: el.dataset.on !== 'true' })) { dirty(); go('admin'); } }
     else if (a === 'recall') { if (!confirm('Devolver ao admin todas as tarefas não concluídas?')) return; const { data, error } = await sb.rpc('recall_now'); if (error) return fail(error); toast(`${data} tarefa(s) recolhida(s)`); dirty(); go('admin'); }
     else if (a === 'perfuser') showPerfUser(v);
+    else if (a === 'start' || a === 'resume') { const { error } = await sb.from('tasks').update({ status: 'andamento' }).eq('id', v); if (error) return fail(error); dirty(); viewDetail(v); }
+    else if (a === 'finish') {   // conclui a SUA parte; a tarefa só fecha quando todos os responsáveis concluem
+      const { error } = await sb.from('task_assignees').update({ progress: 100 }).eq('task_id', v).eq('user_id', me.id); if (error) return fail(error);
+      toast('Sua parte foi concluída!'); dirty(); viewDetail(v);
+    }
   } catch (x) { fail(x); }
 });
 
@@ -288,7 +308,7 @@ document.addEventListener('submit', async e => {
       const blk = d.get('blk') === 'on';
       const { error } = await sb.from('comments').insert({ task_id: id, body: d.get('body').trim(), is_blocker: blk });
       if (error) return fail(error);
-      if (blk && f.dataset.lock !== 'true') await sb.from('tasks').update({ status: 'bloqueada' }).eq('id', id);
+      if (blk && f.dataset.lock !== 'true' && cache['d:' + id]?.k.status === 'andamento') await sb.from('tasks').update({ status: 'bloqueada' }).eq('id', id);
       dirty(); viewDetail(id);
     } else if (k === 'newuser') {
       if (await adminFn({ action: 'create', name: d.get('name'), username: d.get('username'), password: d.get('password') })) { toast('Usuário criado'); dirty(); go('admin'); }
